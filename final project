@@ -1,0 +1,154 @@
+import pygame
+import os
+import sys
+import random
+
+pygame.init()
+
+# Constants
+TILE_SIZE = 16
+GRID_WIDTH = 42
+GRID_HEIGHT = 5
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 720
+FONT = pygame.font.SysFont(None, 24)
+
+fullscreen = False
+screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
+pygame.display.set_caption("Square Race")
+
+# Colors
+TILE_COLORS = {
+    '0': (30, 30, 30),
+    '1': (255, 0, 0),
+    '2': (0, 0, 255),
+    '3': (0, 255, 0),
+    '4': (255, 255, 0),
+    '5': (100, 100, 100),
+    '6': (200, 200, 255),
+    '7': (150, 0, 150),
+    '8': (0, 255, 255),
+    '9': (255, 165, 0),
+}
+
+SPAWN_TILES = ['1', '2', '3', '4']
+
+def load_level(path):
+    if not os.path.exists(path):
+        print(f"File not found: {path}")
+        return []
+    with open(path, "r") as f:
+        return [list(line.strip()) for line in f.readlines()]
+
+def draw_grid(level_data):
+    for y, row in enumerate(level_data):
+        for x, value in enumerate(row):
+            draw_value = '0' if value in SPAWN_TILES else value
+            color = TILE_COLORS.get(draw_value, (255, 255, 255))
+            rect = pygame.Rect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE)
+            pygame.draw.rect(screen, color, rect)
+            pygame.draw.rect(screen, (0, 0, 0), rect, 1)
+
+def draw_button(text, x, y, width, height):
+    rect = pygame.Rect(x, y, width, height)
+    pygame.draw.rect(screen, (0, 120, 200), rect)
+    txt_surf = FONT.render(text, True, (255, 255, 255))
+    screen.blit(txt_surf, (x + (width - txt_surf.get_width()) // 2, y + (height - txt_surf.get_height()) // 2))
+    return rect
+
+# Square class
+class Square:
+    def __init__(self, color, start_pos):
+        self.color = color
+        self.x_tile, self.y_tile = start_pos
+        self.x_pos = self.x_tile * TILE_SIZE
+        self.y_pos = self.y_tile * TILE_SIZE
+        self.direction_x = random.choice([-1, 1])
+        self.direction_y = random.choice([-1, 1])
+        self.speed = 1.5  # speed per frame
+
+    def move(self, level_data):
+        next_x = self.x_pos + self.direction_x * self.speed
+        next_y = self.y_pos + self.direction_y * self.speed
+
+        left_tile = int(next_x / TILE_SIZE)
+        right_tile = int((next_x + TILE_SIZE - 1) / TILE_SIZE)
+        top_tile = int(next_y / TILE_SIZE)
+        bottom_tile = int((next_y + TILE_SIZE - 1) / TILE_SIZE)
+
+        # Horizontal check
+        if 0 <= left_tile < GRID_WIDTH and 0 <= right_tile < GRID_WIDTH:
+            if (level_data[int(self.y_pos / TILE_SIZE)][left_tile] != '5' and
+                level_data[int(self.y_pos / TILE_SIZE)][right_tile] != '5'):
+                self.x_pos = next_x
+            else:
+                self.direction_x *= -1
+
+        # Vertical check
+        if 0 <= top_tile < GRID_HEIGHT and 0 <= bottom_tile < GRID_HEIGHT:
+            if (level_data[top_tile][int(self.x_pos / TILE_SIZE)] != '5' and
+                level_data[bottom_tile][int(self.x_pos / TILE_SIZE)] != '5'):
+                self.y_pos = next_y
+            else:
+                self.direction_y *= -1
+
+    def draw(self):
+        rect = pygame.Rect(int(self.x_pos), int(self.y_pos), TILE_SIZE, TILE_SIZE)
+        pygame.draw.rect(screen, self.color, rect)
+
+# Game state
+level_data = []
+squares = []
+race_started = False
+frame_counter = 0
+
+# Main loop
+running = True
+clock = pygame.time.Clock()
+
+while running:
+    screen.fill((40, 40, 40))
+
+    draw_grid(level_data)
+    load_button = draw_button("Load Level", 10, SCREEN_HEIGHT - 40, 120, 30)
+    race_button = draw_button("Start Race", 140, SCREEN_HEIGHT - 40, 120, 30)
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+        elif event.type == pygame.MOUSEBUTTONDOWN:
+            if load_button.collidepoint(event.pos):
+                level_data = load_level("level1.txt")
+                squares.clear()
+                race_started = False
+
+            elif race_button.collidepoint(event.pos) and level_data:
+                squares.clear()
+                race_started = True
+                for y, row in enumerate(level_data):
+                    for x, val in enumerate(row):
+                        if val in SPAWN_TILES:
+                            color = TILE_COLORS[val]
+                            squares.append(Square(color, (x, y)))
+
+        elif event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_f:
+                fullscreen = not fullscreen
+                if fullscreen:
+                    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+                else:
+                    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)
+
+    if race_started:
+        for square in squares:
+            square.move(level_data)
+
+    for square in squares:
+        square.draw()
+
+    pygame.display.flip()
+    clock.tick(60)
+
+pygame.quit()
+sys.exit()
